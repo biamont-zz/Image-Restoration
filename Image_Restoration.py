@@ -17,7 +17,8 @@ Short Assignment 2 :  Image Restoration
 """
 
 import numpy as np
-import imageio, math, scipy
+import imageio, math, warnings
+import scipy.ndimage
 
 #CREATES A BORDER OF n/2 0s around the img n=3 t=3 a = b = som = 1
 def padding(f, kernel):
@@ -81,31 +82,48 @@ def unsharp_mask(img, k, kernel, sigma, final_img):
         for j in range(centerC, t2+centerC):
             final_img[i-centerR][j-centerC] = convolution_point(pad_img, kernel, i, j)
     
-    #scaling and adding
-    min_f_i = np.min(final_img)
-    max_f_i = np.max(final_img)
+    #normalizing with min = 0 and max is the max value of the original image
+    min_f_i = 0
+    max_f_i = np.max(img)
    
     for i in range(t1):
         for j in range(t2):
-            final_img[i,j] = ((final_img[i,j]-min_f_i)*255)/(max_f_i - min_f_i)
-            
+            final_img[i,j] = ((final_img[i,j]-min_f_i)*255)/(max_f_i - min_f_i)    
             final_img[i,j] = (final_img[i,j]*sigma) + img[i,j]
-
-    #scaling again
-    min_f_i = np.min(final_img)
-    max_f_i = np.max(final_img)
-	
-    for i in range(t1):
-        for j in range(t2):
-            final_img[i,j] = ((final_img[i,j]-min_f_i)*255)/(max_f_i - min_f_i)
             
     return final_img
 
-def constrained_least_squares(Hu, Gu, Pu, gamma):
+def constrained_least_squares(Hu, Gu, Pu, gamma, final_img):
+   Hu_abs = np.abs(Hu) 
+   Pu_abs = np.abs(Pu)
+   
+   div = np.power(Hu_abs,2)+(gamma*(np.power(Pu_abs,2)))
+   kernel_matrix = np.conj(Hu)/div
+   
+   t1, t2 = Gu.shape
+   nr,nc = kernel_matrix.shape# gets kernel's shape
+   centerR = int((nr-1)/2) # find middle row of kernel
+   centerC = int((nc-1)/2) #find middle collun of kernel
     
-    final_img = (np.conj(Hu)/(abs(Hu**2) + gamma(abs(Pu**2)))) * Gu
+
+   #creating padding with +centerR 0's on top and bottom of img and +centerC on right and left of img
+   pad_img = padding(Gu, kernel_matrix)
     
-    return final_img
+   #applying the convolution with the chosed kernel filter
+   for i in range(centerR, t1+centerR):
+       for j in range(centerC, t2+centerC):
+           final_img[i-centerR][j-centerC] = convolution_point(np.abs(pad_img), kernel_matrix, i, j)
+    
+    #scaling and adding
+   min_f_i = 0
+   max_f_i = np.max(Gu)
+   
+   for i in range(t1):
+       for j in range(t2):
+           final_img[i,j] = ((final_img[i,j]-min_f_i)*255)/(max_f_i - min_f_i)    
+           final_img[i,j] = (final_img[i,j]*sigma) + img[i,j]
+            
+   return final_img
 
 #Reads inputs
 filename = str(input()).rstrip()#reads Image File
@@ -128,23 +146,28 @@ tranformed_img = np.zeros((t1,t2), dtype=np.float)
 gfilter = gaussian_filter(k, sigma)
 
 # applying fast fourier transform in img for denoising
-img_fft = scipy.fftpack.fft2(img)
+img_fft = np.fft.ifft2(img)
 # applying fast fourier transform in kernel for denoising
-gfilter_fft = scipy.fftpack.fft2(gfilter)
+gfilter_fft = np.fft.ifft2(gfilter)
 
-Laplacian = [[0, -1, 0], [-1, 4, -1], [0, -1, 0]]
+Laplacian = scipy.ndimage.filters.laplace(gfilter)
+Laplacian = np.fft.ifft2(Laplacian)
 
 transformed_img = unsharp_mask(img, k, gfilter, sigma, final_img)
-final_img = constrained_least_squares(img_fft, gfilter_fft, Laplacian, gamma)
+final_img = constrained_least_squares(gfilter_fft, transformed_img, Laplacian, gamma, final_img)
 
 #normalising using max as the max of image after denoising before debluring
-min_i = 0
-max_i = np.max(tranformed_img)
-for x in range(t1):
-	for y in range(t2):
-		final_img[x,y] = ((final_img[x,y]-min_i)*255/(max_i-min_i))
-            
+#min_i = 0
+#max_i = np.max(tranformed_img)
+#for x in range(t1):
+#	for y in range(t2):
+#	final_img[x,y] = ((final_img[x,y]-min_i)*255/(max_i-min_i))
+  
         
 #prints standard deviation of image after restoration
-print(np.std(final_img)) 
+print("%.2f" % np.std(final_img)) 
+warnings.filterwarnings("ignore")
+
+final_img = final_img.astype(np.uint8) #transforms image bacj to its original format (uint8)          
+imageio.imwrite('output_img.png', final_img)
 
