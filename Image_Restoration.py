@@ -79,7 +79,7 @@ laplacian = np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]])
 
 #sets padding for filter
 padding_filter = (img.shape[0]//2)-gfilter.shape[0]//2
-gfilter_pad = np.pad(gfilter, (padding_filter, padding_filter), "constant",  constant_values=0)
+gfilter_pad = np.pad(gfilter, (padding_filter, padding_filter-1), "constant",  constant_values=0)
 
 # applying fast fourier transform in img and gaussian filter for denoising 
 img_fft = np.fft.ifft2(img)
@@ -99,6 +99,7 @@ transformed_img = scipy.fftpack.fftn(transformed_img)
 #sets padding for laplacian filter
 padding_laplace = (img.shape[0]//2)-laplacian.shape[0]//2
 laplacian_pad = np.pad(laplacian, (padding_laplace, padding_laplace-1), "constant",  constant_values=0)
+laplacian_pad = np.fft.ifft2(laplacian_pad)
 
 final_img = constrained_least_squares(gfilter_fft, transformed_img, laplacian_pad, gamma, final_img)
 
