@@ -101,6 +101,11 @@ def unsharp_mask(img, k, kernel, sigma, final_img):
             
     return final_img
 
+def constrained_least_squares(Hu, Gu, Pu, gamma):
+    
+    final_img = (np.conj(Hu)/(abs(Hu**2) + gamma(abs(Pu**2)))) * Gu
+    
+    return final_img
 
 #Reads inputs
 filename = str(input()).rstrip()#reads Image File
@@ -117,6 +122,7 @@ img = img.astype(np.int32) #casting para realizar as funcoes
 #creates mold for final image
 t1, t2 = img.shape
 final_img = np.zeros((t1,t2), dtype=np.float)
+tranformed_img = np.zeros((t1,t2), dtype=np.float)
 
 #creates gaussian filter
 gfilter = gaussian_filter(k, sigma)
@@ -126,11 +132,19 @@ img_fft = scipy.fftpack.fft2(img)
 # applying fast fourier transform in kernel for denoising
 gfilter_fft = scipy.fftpack.fft2(gfilter)
 
-final_img = unsharp_mask(img, k, gfilter, sigma, final_img)
+Laplacian = [[0, -1, 0], [-1, 4, -1], [0, -1, 0]]
 
-min_img = np.min(img)
-max_img = np.max(img)
+transformed_img = unsharp_mask(img, k, gfilter, sigma, final_img)
+final_img = constrained_least_squares(img_fft, gfilter_fft, Laplacian, gamma)
 
+#normalising using max as the max of image after denoising before debluring
+min_i = 0
+max_i = np.max(tranformed_img)
+for x in range(t1):
+	for y in range(t2):
+		final_img[x,y] = ((final_img[x,y]-min_i)*255/(max_i-min_i))
+            
+        
 #prints standard deviation of image after restoration
 print(np.std(final_img)) 
 
